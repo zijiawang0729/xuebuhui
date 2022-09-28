@@ -1,0 +1,162 @@
+---
+title: "Problem Set 2"
+output: pdf_document
+date: "2022-09-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load("ggplot2")
+```
+
+## Fuel Economy
+#1
+```{r}
+vehicles <- read.csv("~/Desktop/MSSP/homework/xuebuhui/vehicles.csv",header = T)
+head(vehicles)
+m1 <- vehicles[ c("year", "make", "model", "mpgData",
+"phevBlended", "highwayE",
+"fuelType", "fuelType1", "fuelType2",
+"barrels08", "barrelsA08", "charge120", "charge240")]
+m1$phevBlended <- as.logical(m1$phevBlended)
+sum(m1$phevBlended)
+head(m1[m1$phevBlended == FALSE, ])
+```
+```{r}
+m1$fuelType <- as.factor(m1$fuelType)
+levels(m1$fuelType)
+m2 <- subset(m1, m1$fuelType %in% c("CNG","Diesel","Gasoline or E85","Gasoline or natural gas","Gasoline or propane","Midgrade","Premium","Premium or E85" ,"Regular"), drop = TRUE) 
+m3 <- subset(m2,m2$year>=1984 & m2$year<=2023)
+```
+#analysis
+Visualization of changes of Average annual petroleum consumption in barrels from 1984 to 2023.
+```{r}
+m4 <- aggregate(m3$barrels08, list(m3$year), FUN=mean)
+ggplot(data=m4,mapping=aes(x=Group.1,y=x))+
+  xlab("Year") +
+  ylab("Average annual petroleum")+
+  geom_line()+
+  geom_point()
+```
+#2
+Now, examine vehicle makers. Which ones have made the most progress?
+
+```{r, fig.width=30,fig.height=11}
+library("tidyverse")
+m5 <- aggregate(m3$barrels08, list(m3$year,m3$make), FUN=mean)
+p2 = ggplot(m5, aes(x = Group.1, y = x, color = Group.2)) + 
+  geom_line( ) 
+p2
+```
+```{r}
+a <- function(x){
+  max(x)-min(x)
+}
+m6 <- aggregate(m3$barrels08, list(m3$make), FUN=a)
+ggplot(data = m6,aes(x = Group.1, y = x)) + 
+  geom_bar(stat = 'identity')
+```
+
+## NASDAQ Composite
+
+```{r}
+IXIC21_22 <- read.csv("~/Desktop/MSSP/homework/xuebuhui/IXIC21_22.csv",header = T)
+head(IXIC21_22)
+Kplot<-function(OPEN,HIGH,LOW,CLOSE,DATE)
+{
+  N<-length(OPEN)
+  w<-0.3 
+  D<-OPEN-CLOSE 
+  par(family='serif')
+  
+  plot(c(1:N),CLOSE,type='n',xaxt='n',xlab='Date',ylab='Adj.close',font.axis=1.5)
+  
+  title(main='NASDAQ',cex=2,col='black')
+  for(i in 1:N)
+  { 
+    lines(c(i,i),c(LOW[i],HIGH[i]),col='black',lwd=1) 
+    x<-c(i-w,i-w,i+w,i+w)
+    y<-c(OPEN[i],CLOSE[i],CLOSE[i],OPEN[i]) 
+    if(D[i]<0) 
+    { 
+      polygon(x,y,col='green',border='green') 
+    } else 
+    {
+      polygon(x,y,col='red',border='red')
+    }
+  }
+
+  
+  Index<-seq(from=1,to=N,length=5)
+  Index<-round(Index) 
+  Text<-DATE[Index] 
+  axis(side=1,Index,labels=Text,cex.axis=1)
+}
+
+a<-IXIC21_22
+
+date<-a[,1]		
+n<-length(date)	
+open<-a[,2]		
+high<-a[,3]		
+low<-a[,4]		
+close<-a[,5]		
+DATE<-substr(date,1,10)			
+Kplot(open,high, low,close,DATE) 
+
+```
+
+In a sentence or two, what does this plot show?
+This plot reflects the general situation and price information of the stock market, which contains four data, the opening price, the highest price, the lowest price and the closing price. 
+
+## Rural Capacity Index
+#1.
+```{r}
+ruralCapacityData <- read.csv("~/Desktop/MSSP/homework/xuebuhui/ruralCapacityData.csv",header = T)
+head(ruralCapacityData)
+hist(ruralCapacityData$cap_index,main="",xlab="The Rural Capacity Index",breaks = 8)
+a <- ruralCapacityData[,2:15]
+fit <- lm(a$cap_index~.,data = a)
+summary(fit)
+```
+Choose your other variables to reflect their contribution to the rural capacity index.
+From the simplest linear regression analysis, it displays that "Population 25 years and older", "Population with a bachelors degree", and "Percent of population 25 and over with a bachelors degree" have contribution to the rural capacity indexs.
+
+#2.
+```{r}
+x <- ruralCapacityData$per_over_25_with_bach
+y <- log(ruralCapacityData$house_broadband)
+fake <- data.frame(x,y)
+fit2 <- lm(y~x,data = fake)
+summary(fit2)
+ggplot(data = fake,
+aes(x = x, y = y)) +
+geom_point() +
+geom_smooth(method = "lm", se = FALSE)
+```
+```{r}
+fake2 <- data.frame(x,y,ruralCapacityData$cap_index)
+fit2b <- lm(ruralCapacityData$cap_index~x+y,data=fake2)
+summary(fit2b)
+```
+#3
+```{r}
+pop_16 <- subset(ruralCapacityData, ruralCapacityData$pop_total < 16000)
+head(pop_16)
+pop_16_55 <- subset(ruralCapacityData,ruralCapacityData$pop_total > 16000 & ruralCapacityData$pop_total < 55000)
+head(pop_16_55)
+pop_55 <- subset(ruralCapacityData,ruralCapacityData$pop_total > 55000)
+head(pop_55)
+par(mfrow=c(1,3))
+ggplot(data = pop_16,aes(x = County, y = cap_index))+geom_histogram(stat = 'identity')
+ggplot(data = pop_16_55,aes(x = County, y = cap_index))+geom_histogram(stat = 'identity')
+ggplot(data = pop_55,aes(x = County, y = cap_index))+geom_histogram(stat = 'identity')
+```
+What facets of each population subsection stand out to you, demonstrate them in your plots.
+The small population counties show that they have smaller The Rural Capacity Indexs because the small population Capacity Index's highest frequency is 40-45. While as for the Median population and Large population, their highest frequencies are around 84-85.
+```{r}
+hist(pop_16$cap_index,main="",xlab="Cap Index of Small Poppulation",breaks = 10)
+hist(pop_16_55$cap_index,main="",xlab="Cap Index of Median Poppulation",breaks = 10)
+hist(pop_55$cap_index,main="",xlab="Cap Index of Large Poppulation",breaks = 10)
+```
+
