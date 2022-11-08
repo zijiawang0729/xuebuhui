@@ -1,0 +1,302 @@
+---
+title: "MA615 midterm"
+author: "Zijia Wang"
+date: "2022-11-07"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load("tidyverse", "magrittr", "readxl")
+```
+
+```{r}
+strawb <- read_xlsx("~/Downloads/strawberries-2022oct30-a.xlsx",col_names = TRUE)
+```
+
+```{r}
+## Get the column names and index them
+cnames <- colnames(strawb)
+x <- 1:dim(strawb)[2]
+
+## Set T as an indicator
+T <- NULL
+
+## Collect number of unique rows in each column
+for(i in x){T <- c(T, dim(unique(strawb[i]))[1])}
+
+## Use T to select columns to drop -- 
+drop_cols <- cnames[which(T == 1)]
+
+## Now, drop the columns with only one unique value.
+strawb %<>% select(!all_of(drop_cols))
+
+## Let's arrange the data frame by year and state.
+strawb %<>% arrange(Year, State)
+```
+
+```{r}
+strawb %<>% separate(col=`Data Item`,
+                    into = c("Strawberries", "type", "items", "units"),
+                    sep = ",",
+                    fill = "right")
+```
+
+
+
+```{r}
+type_organic <- grep("organic", 
+               strawb$type, 
+               ignore.case = T)
+
+items_organic <- grep("organic", 
+                      strawb$items, 
+                      ignore.case = T)  ## nothing here
+
+Domain_organic <- grep("organic", 
+                      strawb$Domain, 
+                      ignore.case = T)
+
+
+Domain_Category_organic <- grep("organic", 
+                       strawb$`Domain Category`, 
+                       ignore.case = T)
+
+## OK.  So let's create a strawb_organic tibble
+## All three are the same
+
+same <- (intersect(type_organic, Domain_organic)==
+         intersect(type_organic, Domain_organic))
+length(same)==length(type_organic)
+
+
+org_rows <- intersect(type_organic, Domain_organic)
+
+strawb_organic <- strawb %>% slice(org_rows, preserve = FALSE)
+
+strawb_non_organic <- strawb %>% filter(!row_number() %in% org_rows)
+
+## ok strawb has been split
+```
+```{r}
+chem_rows <- grep("BEARING - APPLICATIONS", 
+                       strawb_non_organic$type, 
+                       ignore.case = T)
+## of the 2172 rows in strawb_non_organic 2112 contain
+## chemical data
+
+## the column "Domain" also contains indications of rows 
+## 
+
+chem_rows_1 <- grep("chemical", 
+                  strawb_non_organic$Domain, 
+                  ignore.case = T)
+
+## there are less chem rows in the Domain column
+## than in the type column
+
+ins <- intersect(chem_rows, chem_rows_1)
+
+## the cardinality of the intersection equals the cardinality
+## of chem_rows_1.  So, chem_rows calls all of the chem rows 
+## we have found so far.
+
+## Finally, we examine the `Domain Category`column.
+
+chem_rows_2 <- grep("chemical", 
+                    strawb_non_organic$`Domain Category`, 
+                    ignore.case = T)
+
+ins_2 <- intersect(chem_rows, chem_rows_2)
+
+## again, all of the row numbers in chem_rows_2 are in 
+## chem_rows
+
+
+## now sort out these tibbles just like we did strawb
+## Now, create a chem tibble
+
+
+strawb_chem <- strawb_non_organic %>% slice(chem_rows, preserve = FALSE)
+```
+
+```{r}
+## first drop the "no-info" columns  Since we will need to do this 
+## for all three tibbles, write a functin
+
+
+  before_cols = colnames(strawb_chem)
+  T = NULL
+  x = length(before_cols)
+
+   for(i in 1:x){
+    b <- length(unlist(strawb_chem[,i] %>% unique()) )
+    T <- c(T,b)
+   }
+    
+  drop_cols <- before_cols[which(T == 1)]
+  strawb_chem %<>% select(!all_of(drop_cols))
+  after_cols = colnames(strawb_chem)
+
+## drop_cols is labeling information
+  
+  temp1 <- strawb_chem %>% select(units) %>% distinct()
+  ## in units rows are either NA or AVG
+  
+## separate Domain Category at :
+  
+  strawb_chem %<>% separate(col=`Domain Category`, 
+                                    into = c("dc1", "chem_name"),
+                                    sep = ":", 
+                                    fill = "right")
+  
+temp1 <- strawb_chem %>% select(chem_name) %>% unique()
+length(unlist(temp1))
+
+## first clean it up
+
+aa  <- grep("measured in", 
+                    strawb_chem$items, 
+                    ignore.case = T)
+length(aa)
+
+## so "item" is really units
+
+## are Domain and dc1 the same thing?
+
+sum(strawb_chem$Domain == strawb_chem$dc1) == dim(strawb_chem)[1]
+
+## yes, they are. let's work with dc1. Also, drop State ANSI
+
+strawb_chem %<>% select(Year, State, items, units, dc1, chem_name, Value)
+
+## now you can see that this tibble needs to be wider.  
+## clean up the entries before using pivot_wider
+
+## items should only contain unit names
+## rename units to category
+
+strawb_chem %<>% rename(category = units)
+
+## remove "MEASURED IN " 
+
+strawb_chem$items <- str_remove_all(strawb_chem$items, "MEASURED IN ")
+
+## rename items to units
+strawb_chem %<>% rename(units = items)
+
+## Do all the dc1 entries begen with "Chemical"?
+
+bb  <- grep("CHEMICAL, ", 
+            strawb_chem$dc1, 
+            ignore.case = T)
+length(bb)
+chem <- 1:2112
+
+non_chem_rows <- setdiff(chem, bb)
+length(non_chem_rows)
+
+## on let's look at these rows in a tibble
+
+temp1 <- strawb_chem %>% slice(non_chem_rows)
+
+### !! fertilizers  
+
+## keep them -- probably won't use them as a lone tibble
+
+fertilizers <- temp1
+
+## cleanup
+rm(temp1, temps, temp3, aa, bb)
+
+## now remove "CHEMICAL, " from the entries in the dc1
+## and rename the column chem_types
+
+
+strawb_chem$dc1 <- str_remove_all(strawb_chem$dc1, "CHEMICAL, ")
+
+strawb_chem$dc1 %>% unique()
+
+strawb_chem %<>% rename(chem_types = dc1)
+
+
+## now fix the chem_name column
+
+## remove the parens
+
+strawb_chem$chem_name <- str_remove_all(strawb_chem$chem_name, "\\(")
+
+strawb_chem$chem_name <- str_remove_all(strawb_chem$chem_name, "\\)")
+
+## separate chem_name and chem_code
+
+strawb_chem %<>% separate(col = chem_name,
+                          into = c("chem_name","chem_code"),
+                          sep = "=",
+                          fill = "right"
+                            ) 
+
+
+## now fill in a label fot NA in the category column
+
+## first check that "lb" in the units column corresponds 
+## to NA in the category column
+
+
+aa <- which(strawb_chem$units == " LB")
+
+bb <- which(is.na(strawb_chem$category))
+
+sum(aa==bb)==length(aa)
+
+```
+
+
+# 2 compute 95% confidence interval for organic strawberry
+```{r}
+# according to the strawb_organic data
+mean1 <- 1446458
+sd1 <- 1446458*0.135
+Upper_bound = mean1+1.96*sd1
+Lower_bound = mean1-1.96*sd1
+Lower_bound
+Upper_bound
+```
+
+#3. compute 95% confidence interval for non-organic strawberry
+
+```{r}
+b1 <- subset(strawb_non_organic,Value !="(NA)" & Value!="(D)" & Value!="(Z)")
+b1$Value <- as.numeric(b1$Value)
+n <- length(b1$Value)
+mean2 <- mean(b1$Value)
+sd2 <- sd(b1$Value)
+error <- qt(0.975,df=n-1)*sd1/sqrt(n)
+Upper_bound = mean2+error
+Lower_bound = mean2-error
+Lower_bound
+Upper_bound
+```
+
+#4
+
+```{r}
+california <- subset(strawb_chem,State=="CALIFORNIA")
+l1 <- length(unique(california$chem_name)) 
+l1
+```
+
+#5
+
+
+```{r}
+#etract FL's rows
+Florida <- subset(strawb_chem,strawb_chem$State == "FLORIDA")
+#calculate how many levels
+l2 <- length(unique(Florida$chem_name))
+##There are 116 different chemicals in FL.
+
+dif = l1-l2
+dif
+```
+
